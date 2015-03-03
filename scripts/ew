@@ -1,0 +1,156 @@
+#!/usr/bin/env python
+
+from enginewrangler import Wrangler
+from optparse import OptionParser
+from sys import stdout
+from datetime import datetime, timedelta
+
+parser = OptionParser()
+parser.add_option(
+    '-o', '--host',
+    dest = 'host',
+    help = 'MySQL host',
+    default = 'localhost'
+)
+
+parser.add_option(
+    '-p', '--port',
+    dest = 'port',
+    type = 'int',
+    help = 'MySQL port',
+    default = 3306
+)
+
+parser.add_option(
+    '-u', '--user',
+    dest = 'username',
+    help = 'MySQL username',
+    default = 'mysql'
+)
+
+parser.add_option(
+    '-w', '--password',
+    dest = 'password',
+    help = 'MySQL password',
+    default = 'mysql'
+)
+
+parser.add_option(
+    '-d', '--database',
+    dest = 'database',
+    help = 'MySQL database name',
+    default = ''
+)
+
+parser.add_option(
+    '-r', '--prefix',
+    dest = 'prefix',
+    help = 'ExpressionEngine table prefix',
+    default = 'exp_'
+)
+
+parser.add_option(
+    '-s', '--site',
+    dest = 'site',
+    help = 'ExpressionEngine site name',
+    default = 'default_site'
+)
+
+parser.add_option(
+    '-f', '--format',
+    dest = 'format',
+    help = 'Output file format',
+    default = 'xml'
+)
+
+EPOCH = datetime(1970, 1, 1, 0, 0, 0)
+
+options, args = parser.parse_args()
+with Wrangler(
+    host = options.host,
+    port = options.port,
+    username = options.username,
+    password = options.password,
+    database = options.database,
+    prefix = options.prefix,
+    format = options.format
+) as wrangler:
+    wrangler.select_site(options.site)
+    for channel in wrangler.get_channels():
+        wrangler.describe(channel, 'channel',
+            ('name', 'title', 'description'),
+            end = False,
+            section_name = 'section',
+            aliases = {
+                'name': 'slug',
+                'title': 'name'
+            }
+        )
+
+        for title in wrangler.get_titles(
+            channel['channel_id'],
+            status = 'open'
+        ):
+            wrangler.describe(title, 'title',
+                ('title',),
+                end = False,
+                aliases = {
+                    'url_title': 'slug'
+                },
+                transformers = {
+                    'sticky': lambda v: v == 'y',
+                    'author_id': lambda v: (
+                        'author',
+                        dict(
+                            wrangler._prepare(
+                                wrangler.get_author(v),
+                                'member',
+                                (
+                                    'username',
+                                ),
+                                transformers = {
+                                    'last_activity': lambda v: EPOCH + timedelta(
+                                        seconds = v
+                                    )
+                                }
+                            ),
+                            **wrangler._prepare(
+                                wrangler._pivot(
+                                    'member_fields',
+                                    'member_data',
+                                    'm',
+                                    member_id = v
+                                ),
+                                'member'
+                            )
+                        )
+                    ),
+                    'entry_date': lambda v: (
+                        'date',
+                        EPOCH + timedelta(seconds = v)
+                    )
+                }
+            )
+
+            for key, value in wrangler._pivot(
+                'channel_fields',
+                'channel_data',
+                channel_id = channel['channel_id'],
+                entry_id = title['entry_id']
+            ).items():
+                wrangler._formatter.property(key, value)
+
+            categories = wrangler.get_title_categories(
+                title['entry_id']
+            )
+
+            if any(categories):
+                wrangler._formatter.start_section('categories')
+                for category in categories:
+                    wrangler._formatter.property('category', category['name'])
+
+                wrangler._formatter.end_section()
+
+            wrangler.tidy(1)
+
+        wrangler.tidy(1)
