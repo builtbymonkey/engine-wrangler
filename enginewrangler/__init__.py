@@ -14,7 +14,8 @@ class Wrangler(object):
         password = 'mysql',
         database = '',
         prefix = 'exp_',
-        format = 'xml'
+        format = 'xml',
+        output = stdout
     ):
         self._db = connect(
             host = host,
@@ -28,8 +29,19 @@ class Wrangler(object):
         self._format = format
         self._end_calls = 0
         self._authors = {}
+        self._output = output
 
     def __enter__(self):
+        self._start_spilt()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._end_split()
+
+    def _start_split(self, output = None):
+        if not output is None:
+            self._output = output
+
         try:
             module, klass = FORMATTERS[self._format].rsplit('.', 1)
         except KeyError:
@@ -38,11 +50,10 @@ class Wrangler(object):
         module = import_module(module)
         klass = getattr(module, klass)
 
-        self._formatter = klass(stdout)
+        self._formatter = klass(self._output)
         self._formatter.start_document()
-        return self
 
-    def __exit__(self, type, value, traceback):
+    def _end_split(self, output = None):
         self.tidy()
         self._formatter.end_document()
 
@@ -173,23 +184,24 @@ class Wrangler(object):
         for site in self._select('sites',
             site_name = name
         ):
-            self._site = site['site_id']
-            self.describe(site, 'site',
-                ('label', 'name', 'description'),
-                end = False
-            )
-
+            self._site = site
             return
 
-        raise Exception('Site with name \'%s\' could not be found.' % site_name)
+        raise Exception('Site with name \'%s\' could not be found.' % name)
+
+    def describe_site(self):
+        self.describe(self._site, 'site',
+            ('label', 'name', 'description'),
+            end = False
+        )
 
     def get_channels(self):
-        for channel in self._select('channels', site_id = self._site):
+        for channel in self._select('channels', site_id = self._site['site_id']):
             yield channel
 
     def get_titles(self, channel, **kwargs):
         for title in self._select('channel_titles',
-            site_id = self._site,
+            site_id = self._site['site_id'],
             channel_id = channel,
             **kwargs
         ):

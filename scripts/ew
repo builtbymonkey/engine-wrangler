@@ -2,8 +2,8 @@
 
 from enginewrangler import Wrangler
 from optparse import OptionParser
-from sys import stdout
 from datetime import datetime, timedelta
+from os import getcwd, makedirs, path
 
 parser = OptionParser()
 parser.add_option(
@@ -63,29 +63,76 @@ parser.add_option(
     default = 'xml'
 )
 
+parser.add_option(
+    '-l', '--split',
+    dest = 'split_channels',
+    help = 'Split output by content type',
+    default = False,
+    action = 'store_true'
+)
+
+OUTPUT_DIR = path.join(getcwd(), 'output')
 EPOCH = datetime(1970, 1, 1, 0, 0, 0)
 
-options, args = parser.parse_args()
-with Wrangler(
-    host = options.host,
-    port = options.port,
-    username = options.username,
-    password = options.password,
-    database = options.database,
-    prefix = options.prefix,
-    format = options.format
-) as wrangler:
+def main():
+    options, args = parser.parse_args()
+    wrangler = Wrangler(
+        host = options.host,
+        port = options.port,
+        username = options.username,
+        password = options.password,
+        database = options.database,
+        prefix = options.prefix,
+        format = options.format
+    )
+
+    has_split = False
     wrangler.select_site(options.site)
-    for channel in wrangler.get_channels():
-        wrangler.describe(channel, 'channel',
-            ('name', 'title', 'description'),
-            end = False,
-            section_name = 'section',
-            aliases = {
-                'name': 'slug',
-                'title': 'name'
-            }
+
+    if not options.split_channels:
+        wrangler._start_split()
+        has_split = True
+        wrangler.describe_site()
+    else:
+        if not path.exists(OUTPUT_DIR):
+            makedirs(OUTPUT_DIR)
+
+        wrangler._start_split(
+            open(
+                path.join(
+                    OUTPUT_DIR,
+                    'index.%s' % options.format
+                ),
+                'w'
+            )
         )
+
+        wrangler.describe_site()
+        wrangler._end_split()
+
+    for channel in wrangler.get_channels():
+        if options.split_channels:
+            wrangler._start_split(
+                open(
+                    path.join(
+                        OUTPUT_DIR,
+                        '%s.%s' % (channel['channel_name'], options.format)
+                    ),
+                    'w'
+                )
+            )
+
+            has_split = True
+        else:
+            wrangler.describe(channel, 'channel',
+                ('name', 'title', 'description'),
+                end = False,
+                section_name = 'section',
+                aliases = {
+                    'name': 'slug',
+                    'title': 'name'
+                }
+            )
 
         for title in wrangler.get_titles(
             channel['channel_id'],
@@ -153,4 +200,15 @@ with Wrangler(
 
             wrangler.tidy(1)
 
-        wrangler.tidy(1)
+        if options.split_channels:
+            wrangler._end_split()
+            has_split = False
+        else:
+            wrangler.tidy(1)
+
+    if not options.split_channels:
+        wrangler._end_split()
+        has_split = True
+
+if __name__ == "__main__":
+    main()

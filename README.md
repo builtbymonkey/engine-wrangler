@@ -38,7 +38,7 @@ Once installed, you can just run `ew` with the following parameters:
 - `-s SITE` or `--site=SITE`: ExpressionEngine site name (defaults to `default_site`)
 - `-f FORMAT` or `--format=FORMAT`: Output file format (defaults to `xml`)
 
-### Example
+### Example: Dump the whole site
 
 ```
 ew -d ee -u root > output.xml
@@ -46,6 +46,19 @@ ew -d ee -u root > output.xml
 
 This logs into the local MySQL server using the root account and selects the
 `ee` database. It exports the default site to a file called output.xml.
+
+### Example: Dump site, channel by channel
+
+```
+ew -d ee -u root --split
+```
+
+This logs into the local MySQL server using the root account and selects the
+`ee` database. It exports the default site to a directory it creates, called
+output, with a file called index.php with a summary of the site, and a
+<channel>.xml file for each channel found in the database. The structure of
+this XML is slightly different, in that - with the exception of the index.xml
+file - there are no `<site>` or `<section>` tags.
 
 ### Todo
 

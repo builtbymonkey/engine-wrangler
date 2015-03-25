@@ -1,7 +1,9 @@
 /.Python
 /bin
 /build
-/include
-/lib
 /dist
 /engine_wrangler.egg-info
+/include
+/lib
+/output
+/output.xml
