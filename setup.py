@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name = 'engine-wrangler',
-    version = '0.1',
+    version = '0.2',
     scripts = [
         path.join('scripts', 'ew')
     ],
