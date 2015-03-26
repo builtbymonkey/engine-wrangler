@@ -10,6 +10,7 @@ setup(
     packages = [
         'enginewrangler',
         'enginewrangler.formatters',
+        'enginewrangler.valuetypes',
         'enginewrangler.vendor'
     ],
     install_requires = [

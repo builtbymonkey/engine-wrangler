@@ -1,11 +1,13 @@
 from enginewrangler.formatters.base import FormatterBase
-from enginewrangler.vendor.simplexmlwriter import XMLWriter
+from enginewrangler.vendor.simplexmlwriter import XMLWriter, escape_cdata
+from enginewrangler.valuetypes import *
 
 class XmlFormatter(FormatterBase):
     name = 'xml'
 
     def __init__(self, out):
-        self._out = XMLWriter(out)
+        self._outfile = out
+        self._out = XMLWriter(self._outfile)
 
     def start_document(self):
         self._out.declaration()
@@ -24,7 +26,22 @@ class XmlFormatter(FormatterBase):
             self._out.end()
 
     def property(self, name, value):
-        self._out.element(
-            unicode(str(name).decode('utf-8')),
-            unicode(str(value).decode('utf-8'))
-        )
+        if isinstance(value, HtmlString):
+            self._outfile.write(
+                '<%s><![CDATA[' % escape_cdata(
+                    unicode(str(name).decode('utf-8'))
+                )
+            )
+
+            self._outfile.write(value)
+
+            self._outfile.write(
+                ']]></%s>' % escape_cdata(
+                    unicode(str(name).decode('utf-8'))
+                )
+            )
+        else:
+            self._out.element(
+                unicode(str(name).decode('utf-8')),
+                unicode(str(value).decode('utf-8'))
+            )

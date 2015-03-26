@@ -185,7 +185,10 @@ def main():
                 channel_id = channel['channel_id'],
                 entry_id = title['entry_id']
             ).items():
-                wrangler._formatter.property(key, value)
+                if key.endswith('_content') or key.endswith('_body'):
+                    wrangler._formatter.property(key, HtmlString(value))
+                else:
+                    wrangler._formatter.property(key, value)
 
             categories = wrangler.get_title_categories(
                 title['entry_id']

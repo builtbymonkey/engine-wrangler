@@ -1,0 +1,2 @@
+class HtmlString(str):
+    pass
