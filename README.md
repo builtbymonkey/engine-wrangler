@@ -20,27 +20,36 @@ You should probably use it with Virtualenv.
 
 ### Install from Github
 
-```
+```bash
 pip install git+git://github.com/substrakt/engine-wrangler.git
 ```
 
-## Usage
+## Using Engine Wrangler
 
-Once installed, you can just run `ew` with the following parameters:
+```bsah
+Usage: ew [options]
 
-- `-h` or `--help`: Show this help message and exit
-- `-o HOST` or `--host=HOST`: MySQL host (defaults to `localhost`)
-- `-p PORT` or `--port=PORT`: MySQL port (defaults to `3306`)
-- `-u USERNAME` or `--user=USERNAME`: MySQL username (defaults to `mysql`)
-- `-w PASSWORD` or `--password=PASSWORD`: MySQL password (defaults to `mysql`)
-- `-d DATABASE` or `--database=DATABASE`: MySQL database name (defaults to `mysql`)
-- `-r PREFIX` or `--prefix=PREFIX`: ExpressionEngine table prefix (defaults to `exp_`)
-- `-s SITE` or `--site=SITE`: ExpressionEngine site name (defaults to `default_site`)
-- `-f FORMAT` or `--format=FORMAT`: Output file format (defaults to `xml`)
+Options:
+  -h, --help            show this help message and exit
+  -o HOST, --host=HOST  MySQL host
+  -p PORT, --port=PORT  MySQL port
+  -u USERNAME, --user=USERNAME
+                        MySQL username
+  -w PASSWORD, --password=PASSWORD
+                        MySQL password
+  -d DATABASE, --database=DATABASE
+                        MySQL database name
+  -r PREFIX, --prefix=PREFIX
+                        ExpressionEngine table prefix
+  -s SITE, --site=SITE  ExpressionEngine site name
+  -f FORMAT, --format=FORMAT
+                        Output file format
+  -l, --split           Split output by content type
+```
 
 ### Example: Dump the whole site
 
-```
+```bash
 ew -d ee -u root > output.xml
 ```
 
@@ -49,7 +58,7 @@ This logs into the local MySQL server using the root account and selects the
 
 ### Example: Dump site, channel by channel
 
-```
+```bash
 ew -d ee -u root --split
 ```
 
