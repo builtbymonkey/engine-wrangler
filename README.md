@@ -60,6 +60,15 @@ output, with a file called index.php with a summary of the site, and a
 this XML is slightly different, in that - with the exception of the index.xml
 file - there are no `<site>` or `<section>` tags.
 
+### Configuration
+
+You can also place a file called ew.cfg in the same directory from which you're
+calling the `ew` command (not necessarily the directory in which this package
+is stored), similar to the supplied ew.cfg.sample file. Use that to specify
+arguments if you need to repeatedly run the `ew` command and don't want to have
+to remember all the parameters. All the valid options supported by the `ew`
+command can be set in this config file.
+
 ### Todo
 
 1. Add more export formats

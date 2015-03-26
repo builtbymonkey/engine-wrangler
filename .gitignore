@@ -3,6 +3,7 @@
 /build
 /dist
 /engine_wrangler.egg-info
+/ew.cfg
 /include
 /lib
 /output
