@@ -45,6 +45,12 @@ Options:
   -f FORMAT, --format=FORMAT
                         Output file format
   -l, --split           Split output by content type
+  -m IMAGE_PATH, --imgpath=IMAGE_PATH
+                        Path to store images
+  -n IMAGE_DOMAIN, --imgdomain=IMAGE_DOMAIN
+                        Domain for images
+  -a NEW_BASE, --newbase=NEW_BASE
+                        Replace domains in image URLs with this string
 ```
 
 ### Example: Dump the whole site
@@ -78,11 +84,24 @@ arguments if you need to repeatedly run the `ew` command and don't want to have
 to remember all the parameters. All the valid options supported by the `ew`
 command can be set in this config file.
 
+### Downloading images
+
+Content that looks like HTML is parsed for `<img>` tags. Adding the
+`--imgpath <DIR>` argument downloads those images to the specified
+location.
+
+Specifying `--imgdomain` sets the domain name where legacy images are
+stored. Use this if you're expecting relative URLs. If not, you can ommit this
+option and all images with valid URLs will be downloaded.
+
+If you're moving to a CMS with a specific media storage structure - for example
+WordPress - you can specify the new base URL for all images with the `--newbase`
+argument. This will replace image URLs containing the pattern '//olddomain/'
+with '//newdomain/'.
+
 ### Todo
 
 1. Add more export formats
-2. Look into allowing either filtering by channel, or splitting channels up
-into separate files
 
 ### Get in touch
 

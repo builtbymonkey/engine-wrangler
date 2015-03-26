@@ -1,10 +1,16 @@
 from MySQLdb import connect
 from importlib import import_module
 from sys import stdout
+from urlparse import urljoin, urlparse
+from urllib import urlopen
+from os import path, makedirs
+import re
 
 FORMATTERS = {
     'xml': 'enginewrangler.formatters.xml.XmlFormatter'
 }
+
+IMG_REGEX = re.compile(r'\<img[^\<\>\/]* src="([^"]+)"')
 
 class Wrangler(object):
     def __init__(self,
@@ -307,3 +313,55 @@ class Wrangler(object):
                 self._formatter.end_section()
                 self._end_calls -= 1
                 count -= 1
+
+    def parse_for_images(self, value, save_dir, domain = None, save_base = None):
+        text = str(value)
+
+        if save_base and not save_base.endswith('/'):
+            save_base += '/'
+
+        for match in IMG_REGEX.finditer(text, re.MULTILINE):
+            groups = match.groups()
+            for group in groups:
+                if not group and not group.strip():
+                    continue
+
+                if domain:
+                    old_url = urljoin('http://%s/' % domain, group)
+                else:
+                    old_url = group
+                    if old_url.startswith('//'):
+                        old_url = 'http:%s' % old_url
+
+                    if not old_url.startswith('http:') and not old_url.startswith('https:'):
+                        continue
+
+                new_filename = path.join(save_dir, *urlparse(old_url).path.split('/'))
+                new_dir = path.join(*path.split(new_filename)[:-1])
+
+                if not path.exists(new_dir):
+                    makedirs(new_dir)
+
+                if not path.exists(new_filename):
+                    open(new_filename, 'web').write(
+                        urlopen(old_url).read()
+                    )
+
+                if save_base:
+                    if not domain:
+                        domain = urlparse(old_url).netloc
+                    
+                    new_url = old_url.replace(
+                        'http://%s/' % domain,
+                        save_base
+                    ).replace(
+                        'https://%s/' % domain,
+                        save_base
+                    ).replace(
+                        '//%s/' % domain,
+                        save_base
+                    )
+
+                    text = text.replace(group, new_url)
+
+        return text

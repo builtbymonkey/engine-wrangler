@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 from ConfigParser import ConfigParser
+from copy import copy
 from datetime import datetime, timedelta
 from enginewrangler import Wrangler
 from enginewrangler.valuetypes import *
 from optparse import OptionParser
 from os import getcwd, makedirs, path
-from copy import copy
 
 CONFIG_FILENAME = path.join(getcwd(), 'ew.cfg')
 OUTPUT_DIR = path.join(getcwd(), 'output')
@@ -100,6 +100,27 @@ def main():
         help = 'Split output by content type',
         action = 'store_true',
         default = defaults.get('split') in ('true', 'yes', '1', True, 1)
+    )
+
+    parser.add_option(
+        '-m', '--imgpath',
+        dest = 'image_path',
+        help = 'Path to store images',
+        default = defaults.get('imgpath')
+    )
+
+    parser.add_option(
+        '-n', '--imgdomain',
+        dest = 'image_domain',
+        help = 'Domain for images',
+        default = defaults.get('imgdomain')
+    )
+
+    parser.add_option(
+        '-a', '--newbase',
+        dest = 'new_base',
+        help = 'Replace domains in image URLs with this string',
+        default = defaults.get('newbase')
     )
 
     options, args = parser.parse_args()
@@ -213,6 +234,14 @@ def main():
                 entry_id = title['entry_id']
             ).items():
                 if key.endswith('_content') or key.endswith('_body'):
+                    if options.image_path:
+                        value = wrangler.parse_for_images(
+                            value,
+                            options.image_path,
+                            options.image_domain,
+                            options.new_base
+                        )
+
                     wrangler._formatter.property(key, HtmlString(value))
                 else:
                     wrangler._formatter.property(key, value)
