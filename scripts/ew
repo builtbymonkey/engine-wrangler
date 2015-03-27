@@ -190,7 +190,8 @@ def main():
                 ('title',),
                 end = False,
                 aliases = {
-                    'url_title': 'slug'
+                    'url_title': 'slug',
+                    'id': 'title_id'
                 },
                 transformers = {
                     'sticky': lambda v: v == 'y',
@@ -224,7 +225,8 @@ def main():
                         'date',
                         EPOCH + timedelta(seconds = v)
                     )
-                }
+                },
+                section_name = 'item'
             )
 
             for key, value in wrangler._pivot(
@@ -233,7 +235,12 @@ def main():
                 channel_id = channel['channel_id'],
                 entry_id = title['entry_id']
             ).items():
-                if key.endswith('_content') or key.endswith('_body'):
+                if (
+                    key.endswith('_content') or \
+                    key.endswith('_body') or \
+                    key.endswith('_text') or \
+                    key in ('content', 'body', 'text')
+                ):
                     if options.image_path:
                         value = wrangler.parse_for_images(
                             value,

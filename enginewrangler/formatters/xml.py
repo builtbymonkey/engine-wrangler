@@ -28,17 +28,22 @@ class XmlFormatter(FormatterBase):
     def property(self, name, value):
         if isinstance(value, HtmlString):
             self._outfile.write(
-                '<%s><![CDATA[' % escape_cdata(
-                    unicode(str(name).decode('utf-8'))
-                )
+                '<%s><![CDATA[' % escape_cdata(name)
             )
+
+            value = ' '.join(
+                value.replace(
+                    '&nbsp;', ' '
+                ).splitlines()
+            )
+
+            while '  ' in value:
+                value = value.replace('  ', ' ')
 
             self._outfile.write(value)
 
             self._outfile.write(
-                ']]></%s>' % escape_cdata(
-                    unicode(str(name).decode('utf-8'))
-                )
+                ']]></%s>' % escape_cdata(name)
             )
         else:
             self._out.element(
