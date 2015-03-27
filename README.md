@@ -51,7 +51,16 @@ Options:
                         Domain for images
   -a NEW_BASE, --newbase=NEW_BASE
                         Replace domains in image URLs with this string
+  --htmlfields=HTML_FIELDS
+                        Specify HTML fields (channel:field)
 ```
+
+#### `htmlfields` in more detail
+
+You can use the `htmlfields` argument to define fields within channel entries
+that should be treated as HTML. It's a space-separated list of channel:field
+pairs. Each channel can have multiple fields, separated by commas, eg:
+`blog:blog_text,excerpt, case_studies:description`.
 
 ### Example: Dump the whole site
 
