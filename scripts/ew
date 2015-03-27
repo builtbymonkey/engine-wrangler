@@ -3,13 +3,14 @@
 from ConfigParser import ConfigParser
 from copy import copy
 from datetime import datetime, timedelta
-from enginewrangler import Wrangler
+from enginewrangler import Wrangler, FileDownload
 from enginewrangler.valuetypes import *
 from optparse import OptionParser
 from os import getcwd, makedirs, path
 
 CONFIG_FILENAME = path.join(getcwd(), 'ew.cfg')
 OUTPUT_DIR = path.join(getcwd(), 'output')
+VARS_FILENAME = path.join(getcwd(), 'vars.json')
 EPOCH = datetime(1970, 1, 1, 0, 0, 0)
 DEFAULTS = {
     'host': 'localhost',
@@ -20,7 +21,8 @@ DEFAULTS = {
     'prefix': 'exp_',
     'site': 'default_site',
     'format': 'xml',
-    'split_channels': False
+    'split': False,
+    'htmlfields': None
 }
 
 def main():
@@ -123,6 +125,13 @@ def main():
         default = defaults.get('newbase')
     )
 
+    parser.add_option(
+        '--htmlfields',
+        dest = 'html_fields',
+        help = 'Specify HTML fields (channel:field)',
+        default = defaults.get('htmlfields')
+    )
+
     options, args = parser.parse_args()
     wrangler = Wrangler(
         host = options.host,
@@ -136,6 +145,23 @@ def main():
 
     has_split = False
     wrangler.select_site(options.site)
+
+    if options.html_fields:
+        html_fields = dict(
+            [
+                [
+                    f[0],
+                    f[1].split(',')
+                ] for f in [
+                    s.split(':', 1) for s in options.html_fields.split(' ')
+                ]
+            ]
+        )
+    else:
+        html_fields = {}
+
+    if path.exists(VARS_FILENAME):
+        wrangler.load_vars_file(VARS_FILENAME)
 
     if not options.split_channels:
         wrangler._start_split()
@@ -191,7 +217,7 @@ def main():
                 end = False,
                 aliases = {
                     'url_title': 'slug',
-                    'id': 'title_id'
+                    'entry_id': 'id'
                 },
                 transformers = {
                     'sticky': lambda v: v == 'y',
@@ -235,12 +261,22 @@ def main():
                 channel_id = channel['channel_id'],
                 entry_id = title['entry_id']
             ).items():
-                if (
+                if isinstance(value, dict):
+                    wrangler.describe(value, 'relationship')
+                elif isinstance(value, FileDownload):
+                    wrangler._formatter.property(key,
+                        wrangler.save_download(value,
+                            options.image_path,
+                            options.image_domain,
+                            options.new_base
+                        )
+                    )
+                elif (
                     key.endswith('_content') or \
                     key.endswith('_body') or \
                     key.endswith('_text') or \
                     key in ('content', 'body', 'text')
-                ):
+                ) or key in html_fields.get(channel['channel_name'], []):
                     if options.image_path:
                         value = wrangler.parse_for_images(
                             value,
@@ -249,9 +285,16 @@ def main():
                             options.new_base
                         )
 
-                    wrangler._formatter.property(key, HtmlString(value))
+                    wrangler._formatter.property(key,
+                        HtmlString(
+                            wrangler.vars_replace(value)
+                        )
+                    )
                 else:
-                    wrangler._formatter.property(key, value)
+                    wrangler._formatter.property(
+                        key,
+                        wrangler.vars_replace(value)
+                    )
 
             categories = wrangler.get_title_categories(
                 title['entry_id']

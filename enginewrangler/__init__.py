@@ -4,13 +4,16 @@ from sys import stdout
 from urlparse import urljoin, urlparse
 from urllib import urlopen
 from os import path, makedirs
-import re
+import re, phpserialize, json
 
 FORMATTERS = {
     'xml': 'enginewrangler.formatters.xml.XmlFormatter'
 }
 
 IMG_REGEX = re.compile(r'\<img[^\<\>\/]* src="([^"]+)"')
+
+class FileDownload(str):
+    pass
 
 class Wrangler(object):
     def __init__(self,
@@ -36,6 +39,11 @@ class Wrangler(object):
         self._end_calls = 0
         self._authors = {}
         self._output = output
+
+    def load_vars_file(self, filename):
+        self._vars = json.loads(
+            open(filename, 'r').read()
+        )
 
     def __enter__(self):
         self._start_spilt()
@@ -175,12 +183,77 @@ class Wrangler(object):
 
                     continue
 
-                if field_type in ('file', 'rel', 'social_update'):
-                    del rd[field_name]
-                    continue
-
                 if field_type == 'checkboxes':
                     rd[field_name] = rd[field_name] == 'yes'
+                    continue
+
+                if field_type == 'rel':
+                    rel_cursor = self._db.cursor()
+                    rel_cursor.execute(
+                        'SELECT rel_type, rel_child_id FROM %srelationships WHERE rel_id = %%s' % self._prefix,
+                        [
+                            rd[field_name]
+                        ]
+                    )
+
+                    rel_fieldnames = [
+                        f[0] for f in rel_cursor.description
+                    ]
+
+                    for rel_row in rel_cursor.fetchall():
+                        rel_rd = dict(
+                            [
+                                (
+                                    rel_fieldnames[i],
+                                    v
+                                ) for i, v in enumerate(rel_row) if v
+                            ]
+                        )
+
+                        if rel_rd['rel_type'] == 'channel':
+                            subrel_cursor = self._db.cursor()
+                            subrel_cursor.execute(
+                                'SELECT c.channel_name FROM %schannel_titles AS t INNER JOIN %schannels AS c ON t.channel_id = c.channel_id WHERE t.entry_id = %%s' % (
+                                    self._prefix,
+                                    self._prefix
+                                ),
+                                [
+                                    rel_rd['rel_child_id']
+                                ]
+                            )
+
+                            subrel_fieldnames = [
+                                f[0] for f in subrel_cursor.description
+                            ]
+
+                            for subrel_row in subrel_cursor.fetchall():
+                                subrel_rd = dict(
+                                    [
+                                        (
+                                            subrel_fieldnames[i],
+                                            v
+                                        ) for i, v in enumerate(subrel_row) if v
+                                    ]
+                                )
+
+                                rd[field_name] = {
+                                    subrel_rd['channel_name']: rel_rd['rel_child_id']
+                                }
+                        else:
+                            raise Exception(
+                                'Unsupported relationship type "%s"' % rel_rd['rel_type']
+                            )
+
+                        continue
+
+                if field_type == 'file':
+                    fileurl = self.vars_replace(rd[field_name])
+                    rd[field_name] = FileDownload(fileurl)
+                    continue
+
+                if field_type in ('social_update',):
+                    del rd[field_name]
+                    continue
 
             return rd
 
@@ -296,7 +369,10 @@ class Wrangler(object):
             if isinstance(value, dict):
                 self.describe(value, key)
             else:
-                self._formatter.property(key, value)
+                self._formatter.property(
+                    key,
+                    self.vars_replace(value)
+                )
 
         if end:
             self._formatter.end_section()
@@ -326,42 +402,64 @@ class Wrangler(object):
                 if not group and not group.strip():
                     continue
 
-                if domain:
-                    old_url = urljoin('http://%s/' % domain, group)
-                else:
-                    old_url = group
-                    if old_url.startswith('//'):
-                        old_url = 'http:%s' % old_url
+                saved = self.save_download(
+                    group, save_dir,
+                    domain, save_base
+                )
 
-                    if not old_url.startswith('http:') and not old_url.startswith('https:'):
-                        continue
+                if saved:
+                    text = text.replace(group, saved)
 
-                new_filename = path.join(save_dir, *urlparse(old_url).path.split('/'))
-                new_dir = path.join(*path.split(new_filename)[:-1])
+        return text
 
-                if not path.exists(new_dir):
-                    makedirs(new_dir)
+    def save_download(self, url, save_dir, domain = None, save_base = None):
+        if domain:
+            old_url = urljoin('http://%s/' % domain, group)
+        else:
+            old_url = url
+            if old_url.startswith('//'):
+                old_url = 'http:%s' % old_url
 
-                if not path.exists(new_filename):
-                    open(new_filename, 'web').write(
-                        urlopen(old_url).read()
-                    )
+            if not old_url.startswith('http:') and not old_url.startswith('https:'):
+                return
 
-                if save_base:
-                    if not domain:
-                        domain = urlparse(old_url).netloc
-                    
-                    new_url = old_url.replace(
-                        'http://%s/' % domain,
-                        save_base
-                    ).replace(
-                        'https://%s/' % domain,
-                        save_base
-                    ).replace(
-                        '//%s/' % domain,
-                        save_base
-                    )
+            domain = urlparse(old_url).netloc
 
-                    text = text.replace(group, new_url)
+        if save_dir:
+            new_filename = path.join(save_dir, *urlparse(old_url).path.split('/'))
+            new_dir = path.join(*path.split(new_filename)[:-1])
+
+            if not path.exists(new_dir):
+                makedirs(new_dir)
+
+            if not path.exists(new_filename):
+                open(new_filename, 'web').write(
+                    urlopen(old_url).read()
+                )
+
+        if save_base:
+            return old_url.replace(
+                'http://%s/' % domain,
+                save_base
+            ).replace(
+                'https://%s/' % domain,
+                save_base
+            ).replace(
+                '//%s/' % domain,
+                save_base
+            )
+
+        return old_url
+
+    def vars_replace(self, text):
+        if not isinstance(text, (str, unicode)):
+            return text
+
+        for key, value in self._vars.items():
+            if ('{%s}' % str(key)) in text:
+                text = text.replace(
+                    '{%s}' % key,
+                    value
+                )
 
         return text

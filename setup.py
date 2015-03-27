@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name = 'engine-wrangler',
-    version = '0.5',
+    version = '1.0',
     scripts = [
         path.join('scripts', 'ew')
     ],
@@ -14,6 +14,7 @@ setup(
         'enginewrangler.vendor'
     ],
     install_requires = [
-        'MySQL-python'
+        'MySQL-python',
+        'phpserialize'
     ]
 )

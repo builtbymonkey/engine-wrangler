@@ -84,6 +84,13 @@ arguments if you need to repeatedly run the `ew` command and don't want to have
 to remember all the parameters. All the valid options supported by the `ew`
 command can be set in this config file.
 
+### Variables
+
+Some field values - media URLs specifically - have variable names within them.
+You can define a variable file called vars.json, which contains a JSON
+dictionary mapping variable names to values. These values will then be used
+when creating the export.
+
 ### Downloading images
 
 Content that looks like HTML is parsed for `<img>` tags. Adding the
@@ -98,6 +105,15 @@ If you're moving to a CMS with a specific media storage structure - for example
 WordPress - you can specify the new base URL for all images with the `--newbase`
 argument. This will replace image URLs containing the pattern '//olddomain/'
 with '//newdomain/'.
+
+Images found in custom fields may contain variable names, so if you haven't
+deifned your vars.json file you might find that the download fails.
+
+### Recent changes
+
+- 2015-03-27: Added handling of relationship and file fields
+- 2015-03-26: Download and save images in HTML fields
+- 2015-03-25: Export long-form HTML as `CDATA`
 
 ### Todo
 
