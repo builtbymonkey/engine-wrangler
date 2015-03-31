@@ -213,7 +213,7 @@ class Wrangler(object):
                         if rel_rd['rel_type'] == 'channel':
                             subrel_cursor = self._db.cursor()
                             subrel_cursor.execute(
-                                'SELECT c.channel_name FROM %schannel_titles AS t INNER JOIN %schannels AS c ON t.channel_id = c.channel_id WHERE t.entry_id = %%s' % (
+                                'SELECT t.entry_id, t.url_title, c.channel_name FROM %schannel_titles AS t INNER JOIN %schannels AS c ON t.channel_id = c.channel_id WHERE t.entry_id = %%s' % (
                                     self._prefix,
                                     self._prefix
                                 ),
@@ -237,7 +237,10 @@ class Wrangler(object):
                                 )
 
                                 rd[field_name] = {
-                                    subrel_rd['channel_name']: rel_rd['rel_child_id']
+                                    subrel_rd['channel_name']: {
+                                        'id': subrel_rd['entry_id'],
+                                        'slug': subrel_rd['url_title']
+                                    }
                                 }
                         else:
                             raise Exception(

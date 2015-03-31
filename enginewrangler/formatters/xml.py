@@ -45,7 +45,12 @@ class XmlFormatter(FormatterBase):
             self._outfile.write(
                 ']]></%s>' % escape_cdata(name)
             )
-        else:
+        elif isinstance(value, bool):
+            self._out.element(
+                unicode(str(name).decode('utf-8')),
+                value and 'true' or 'false'
+            )
+        elif not value is None:
             self._out.element(
                 unicode(str(name).decode('utf-8')),
                 unicode(str(value).decode('utf-8'))
