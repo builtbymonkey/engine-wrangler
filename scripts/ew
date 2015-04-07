@@ -5,6 +5,7 @@ from copy import copy
 from datetime import datetime, timedelta
 from enginewrangler import Wrangler, FileDownload
 from enginewrangler.valuetypes import *
+from urlparse import urljoin
 from optparse import OptionParser
 from os import getcwd, makedirs, path
 
@@ -22,7 +23,8 @@ DEFAULTS = {
     'site': 'default_site',
     'format': 'xml',
     'split': False,
-    'htmlfields': None
+    'htmlfields': None,
+    'attachments': 'attachments'
 }
 
 def main():
@@ -119,10 +121,31 @@ def main():
     )
 
     parser.add_option(
-        '-a', '--newbase',
-        dest = 'new_base',
-        help = 'Replace domains in image URLs with this string',
-        default = defaults.get('newbase')
+        '--imagepattern',
+        dest = 'image_pattern',
+        help = 'Replace image URLs using this pattern',
+        default = defaults.get('imagepattern')
+    )
+
+    parser.add_option(
+        '--avatarbase',
+        dest = 'avatar_base',
+        help = '',
+        default = defaults.get('avatarbase')
+    )
+
+    parser.add_option(
+        '--avatarpath',
+        dest = 'avatar_path',
+        help = '',
+        default = defaults.get('avatarpath')
+    )
+
+    parser.add_option(
+        '--avatarpattern',
+        dest = 'avatar_pattern',
+        help = 'Replace avatar URLs using this pattern',
+        default = defaults.get('avatarpattern')
     )
 
     parser.add_option(
@@ -130,6 +153,13 @@ def main():
         dest = 'html_fields',
         help = 'Specify HTML fields (channel:field)',
         default = defaults.get('htmlfields')
+    )
+
+    parser.add_option(
+        '--attachments',
+        dest = 'attachments',
+        help = 'Name of the key or tag under which to store attachments',
+        default = defaults.get('attachments')
     )
 
     options, args = parser.parse_args()
@@ -163,6 +193,22 @@ def main():
     if path.exists(VARS_FILENAME):
         wrangler.load_vars_file(VARS_FILENAME)
 
+    def save_avatar(url):
+        if options.avatar_base:
+            new_url = urljoin(options.avatar_base, url)
+        else:
+            new_url = url
+
+        if options.avatar_path:
+            return wrangler.save_download(
+                new_url,
+                options.avatar_path,
+                options.image_domain,
+                options.avatar_pattern
+            )
+
+        return new_url
+
     if not options.split_channels:
         wrangler._start_split()
         has_split = True
@@ -171,6 +217,7 @@ def main():
         if not path.exists(OUTPUT_DIR):
             makedirs(OUTPUT_DIR)
 
+        print 'Exporting users'
         wrangler._start_split(
             open(
                 path.join(
@@ -183,6 +230,66 @@ def main():
 
         wrangler.describe_site()
         wrangler._end_split()
+
+        wrangler._start_split(
+            open(
+                path.join(
+                    OUTPUT_DIR,
+                    'users.%s' % options.format
+                ),
+                'w'
+            )
+        )
+
+        for user in wrangler._raw_select(
+            'SELECT m.* FROM %smembers AS m ' \
+            'INNER JOIN %schannel_titles AS t ON m.member_id = t.author_id' % (
+                options.prefix, options.prefix
+            )
+        ):
+            wrangler.clear_attachments()
+            names = user.get('screen_name', '').rsplit(' ', 1)
+
+            if len(names) > 1:
+                user['first_name'] = names[0]
+                user['last_name'] = names[1]
+            elif any(names):
+                user['first_name'] = names[0]
+
+            wrangler.describe(user, 'user',
+                (
+                    'bio',
+                    'first_name',
+                    'last_name',
+                    'occupation',
+                    'email'
+                ),
+                aliases = {
+                    'member_id': 'id',
+                    'accept_admin_email': 'admin',
+                    'avatar_filename': 'avatar'
+                },
+                transformers = {
+                    'last_activity': lambda v: EPOCH + timedelta(
+                        seconds = v
+                    ),
+                    'username': lambda v: v and v.lower().strip().replace(' ', '') or None,
+                    'admin': lambda v: v == 'y',
+                    'avatar': save_avatar
+                },
+                end = False
+            )
+
+            if options.attachments:
+                wrangler.describe_attachments(
+                    options.attachments
+                )
+
+            wrangler.tidy(1)
+
+        has_split = False
+        wrangler._end_split()
+        has_split = True
 
     for channel in wrangler.get_channels():
         if options.split_channels:
@@ -197,6 +304,7 @@ def main():
             )
 
             has_split = True
+            print 'Exporting %s channel' % channel['channel_name']
         else:
             wrangler.describe(channel, 'channel',
                 ('name', 'title', 'description'),
@@ -233,7 +341,8 @@ def main():
                                 transformers = {
                                     'last_activity': lambda v: EPOCH + timedelta(
                                         seconds = v
-                                    )
+                                    ),
+                                    'username': lambda v: v and v.lower().strip().replace(' ', '') or None
                                 }
                             ),
                             **wrangler._prepare(
@@ -255,6 +364,8 @@ def main():
                 section_name = 'item'
             )
 
+            wrangler.clear_attachments()
+
             for key, value in wrangler._pivot(
                 'channel_fields',
                 'channel_data',
@@ -268,7 +379,7 @@ def main():
                         wrangler.save_download(value,
                             options.image_path,
                             options.image_domain,
-                            options.new_base
+                            options.image_pattern
                         )
                     )
                 elif (
@@ -277,13 +388,12 @@ def main():
                     key.endswith('_text') or \
                     key in ('content', 'body', 'text')
                 ) or key in html_fields.get(channel['channel_name'], []):
-                    if options.image_path:
-                        value = wrangler.parse_for_images(
-                            value,
-                            options.image_path,
-                            options.image_domain,
-                            options.new_base
-                        )
+                    value = wrangler.parse_for_images(
+                        value,
+                        options.image_path,
+                        options.image_domain,
+                        options.image_pattern
+                    )
 
                     wrangler._formatter.property(key,
                         HtmlString(
@@ -306,6 +416,11 @@ def main():
                     wrangler._formatter.property('category', category['name'])
 
                 wrangler._formatter.end_section()
+
+            if options.attachments:
+                wrangler.describe_attachments(
+                    options.attachments
+                )
 
             wrangler.tidy(1)
 

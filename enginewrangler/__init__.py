@@ -4,6 +4,7 @@ from sys import stdout
 from urlparse import urljoin, urlparse
 from urllib import urlopen
 from os import path, makedirs
+from mimetypes import guess_type
 import re, phpserialize, json
 
 FORMATTERS = {
@@ -39,6 +40,7 @@ class Wrangler(object):
         self._end_calls = 0
         self._authors = {}
         self._output = output
+        self._attachments = []
 
     def load_vars_file(self, filename):
         self._vars = json.loads(
@@ -83,6 +85,21 @@ class Wrangler(object):
         if any(wheres):
             sql += 'WHERE (%s)' % ' AND '.join(wheres)
 
+        cursor = self._db.cursor()
+        cursor.execute(sql, params)
+
+        fieldnames = [f[0] for f in cursor.description]
+        for row in cursor.fetchall():
+            yield dict(
+                [
+                    (
+                        fieldnames[i],
+                        v
+                    ) for i, v in enumerate(row)
+                ]
+            )
+
+    def _raw_select(self, sql, *params):
         cursor = self._db.cursor()
         cursor.execute(sql, params)
 
@@ -393,11 +410,8 @@ class Wrangler(object):
                 self._end_calls -= 1
                 count -= 1
 
-    def parse_for_images(self, value, save_dir, domain = None, save_base = None):
+    def parse_for_images(self, value, save_dir, domain = None, pattern = None):
         text = str(value)
-
-        if save_base and not save_base.endswith('/'):
-            save_base += '/'
 
         for match in IMG_REGEX.finditer(text, re.MULTILINE):
             groups = match.groups()
@@ -407,7 +421,7 @@ class Wrangler(object):
 
                 saved = self.save_download(
                     group, save_dir,
-                    domain, save_base
+                    domain, pattern
                 )
 
                 if saved:
@@ -415,7 +429,41 @@ class Wrangler(object):
 
         return text
 
-    def save_download(self, url, save_dir, domain = None, save_base = None):
+    def url_pattern_replace(self, url, pattern):
+        if '$' in pattern:
+            if url.startswith('http://'):
+                url = url[7:]
+            elif url.startswith('https://'):
+                url = url[8:]
+            elif url.startswith('//'):
+                url = url[3:]
+
+            splitup = url.split('/')
+            for group in re.findall(r'\$(\d+)', pattern):
+                index = int(group)
+                url = pattern.replace('$%d' % index, splitup[index])
+
+            for group in re.findall(r'\$\((-?\d+)\)', pattern):
+                index = int(group)
+                url = pattern.replace('$(%d)' % index, splitup[index])
+
+            return url
+        else:
+            if pattern and not pattern.endswith('/'):
+                pattern += '/'
+
+            return url.replace(
+                'http://%s/' % domain,
+                pattern
+            ).replace(
+                'https://%s/' % domain,
+                pattern
+            ).replace(
+                '//%s/' % domain,
+                pattern
+            )
+
+    def save_download(self, url, save_dir, domain = None, pattern = None):
         if domain:
             old_url = urljoin('http://%s/' % domain, group)
         else:
@@ -440,18 +488,12 @@ class Wrangler(object):
                     urlopen(old_url).read()
                 )
 
-        if save_base:
-            return old_url.replace(
-                'http://%s/' % domain,
-                save_base
-            ).replace(
-                'https://%s/' % domain,
-                save_base
-            ).replace(
-                '//%s/' % domain,
-                save_base
-            )
+        if pattern:
+            new_url = self.url_pattern_replace(old_url, pattern)
+            self.add_attachment(new_url)
+            return new_url
 
+        self.add_attachment(old_url)
         return old_url
 
     def vars_replace(self, text):
@@ -466,3 +508,24 @@ class Wrangler(object):
                 )
 
         return text
+
+    def clear_attachments(self):
+        self._attachments = []
+
+    def add_attachment(self, url):
+        a = {
+            'url': url
+        }
+
+        a['content_type'], encoding = guess_type(url)
+        self._attachments.append(a)
+
+    def describe_attachments(self, section_name):
+        if not any(self._attachments):
+            return
+
+        self._formatter.start_section(section_name)
+        for attachment in self._attachments:
+            self.describe(attachment, 'attachment')
+
+        self._formatter.end_section()
